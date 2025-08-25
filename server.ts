@@ -3,6 +3,10 @@
 import { spawn } from 'child_process';
 import { getWebSocketServer, closeWebSocketServer } from '@/websocket/websocketServer';
 
+console.log('Starting servers...');
+console.log('- Next.js app: http://localhost:3000');
+console.log('- WebSocket server: ws://localhost:3001');
+
 // Start WebSocket server
 getWebSocketServer(3001);
 
@@ -29,7 +33,3 @@ process.on('SIGTERM', () => {
   closeWebSocketServer();
   process.exit(0);
 });
-
-console.log('Starting servers...');
-console.log('- Next.js app: http://localhost:3000');
-console.log('- WebSocket server: ws://localhost:3001');

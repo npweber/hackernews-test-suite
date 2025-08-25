@@ -1,33 +1,46 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+
 import StatusDisplay from '@/app/component/statusDisplay';
 import ConsoleOutput from '@/app/component/consoleOutput';
 import { Test } from '@/types/test';
 import { WebSocketMessage } from '@/types/websocketMessage';
 import { TestWebSocketService } from '@/app/services/websocketService';
+import { safeJsonStringify } from '@/app/lib/util';
 
-// Home component: Main page of the application
 export default function Home() {
   /* State variables: tests and running all flag */
   const [tests, setTests] = useState<Test[]>([]);
   const [isRunningAll, setIsRunningAll] = useState(false);
 
   /* Console output, connection status, 
-  and web socket service state variables */
+  and ConsoleOutputListener (web socket service) state variables */
   const [consoleOutput, setConsoleOutput] = useState<string[]>([]);
   const [isWebSocketConnected, setIsWebSocketConnected] = useState(false);
   const [consoleOutputListener] = useState(() => new TestWebSocketService());
 
   /* Fetch tests from server */
   useEffect(() => {
-    fetch('/api/tests').then(res => res.json()).then(data => setTests(data as Test[]));
+    fetch('/api/tests').then(async (res: Response) => {
+      const data: { tests: Test[] } | { error: string } = await res.json();
+      if ('tests' in data && data.tests) {
+        setTests(prev => [...prev, ...data.tests]);
+        console.log(`Client: Fetched ${tests.map.length} tests from server.`);
+      }
+      else if('error' in data && data.error) {
+        console.error(`Client: Failed to fetch tests: ${data.error}`);
+      }
+      else {
+        console.error(`Client: Failed to fetch tests: ${safeJsonStringify(data) || 'Unknown error'}`);
+      }
+    });
   }, []);
 
-  /* WebSocket connection setup */
+  /* ConsoleOutputListener websocket setup */
   useEffect(() => {
-    const handleWebSocketMessage = (message: WebSocketMessage) => {
-      /* Handle the message based on the type */
+    /* Handle a message from the web socket server */
+    const handleWebSocketMessage: (message: WebSocketMessage) => void = async (message: WebSocketMessage) => {
       switch (message.type) {
         /* If the message is type test_output, append it to the console output */
         case 'test_output': {
@@ -46,11 +59,6 @@ export default function Home() {
             consoleOutputListener.disconnect();
             console.error(`TestWebSocketService: ERROR: ${message.data.message}`);
           }
-          break;
-        }
-        // TODO: Handle test status
-        case 'test_status': {
-          
         }
       }
     };
@@ -67,92 +75,40 @@ export default function Home() {
     };
   }, [consoleOutputListener]);
 
-  const formatTimestamp = (date: Date) => {
-    return date.toLocaleString('en-US', {
-      month: 'numeric',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      hour12: false
-    });
-  };
-
+  /* Run a test by test id on the client */
   const runTest = async (testId: string) => {
+    /* Clear the console output */
+    setConsoleOutput(() => []);
+
     /* Find the test in the tests array */
     const test = tests.find(t => t.id === testId) as Test;
-    /* If the test is not found, return */
-    if (!test) {   
-      console.error(`Run test failed: Test not found: ${testId}`);
-      return;
+
+    if (test) {
+      test.status = 'running';
+
+      /* Update the test status to running */
+      setTests(prev => prev.map(t => t.id === testId ? test : t));
+
+      /* Log the test status */
+      console.log(`Client: Test "${test.name}" status "running" on client.`);
+
+      // TODO: Run the test on the server
+
+      // TODO: Update the test status on the server
     }
-
-    /* Update the test status to running */
-    tests.map(test => test.id === testId ? { ...test, status: 'running' } : test);
-    setTests(prev => prev.map(test => 
-      test.id === testId ? { ...test, status: 'running' } : test
-    ));
-
-    try {
-      /* Update the test status to running on the server */
-      fetch(`/api/tests`, {
-        method: 'POST',
-        body: JSON.stringify({ test: test as Test })
-      });
-
-      /* Run the test on the server */
-      fetch(`/api/run-test`, {
-        method: 'POST',
-        body: JSON.stringify({ testName: test.name })
-      });
-
-      /* Simulate API call to run test */
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      /* Use random pass/fail */
-      const isPassed = Math.random() > 0.3;
-
-      /* Format the timestamp passedAt or failedAt at this moment */
-      const timestamp = formatTimestamp(new Date());
-      
-      /* Update the test status to passed or failed */
-      tests.map(test => test.id === testId ? {
-        ...test, 
-        status: isPassed ? 'passed' : 'failed', 
-        passedAt: isPassed ? timestamp : undefined, 
-        failedAt: !isPassed ? timestamp : undefined 
-      } : test);
-      setTests(prev => prev.map(test => 
-        test.id === testId ? {
-          ...test,
-          status: isPassed ? 'passed' : 'failed',
-          passedAt: isPassed ? timestamp : undefined,
-          failedAt: !isPassed ? timestamp : undefined,
-        } : test
-      ));
-    } catch (error) {
-      /* Update the test status to failed if an error occurs */
-      // TODO: Handle error
-      setTests(prev => prev.map(test => 
-        test.id === testId ? { ...test, status: 'failed', failedAt: formatTimestamp(new Date()) } : test
-      ));
+    else {
+      console.error(`Client: Test "${testId}" not found.`);
     }
+  }
 
-    fetch(`/api/tests`, {
-      method: 'POST',
-      body: JSON.stringify({ test: test as Test })
-    });
-  };
-
+  /* Run all tests */
   const runAllTests = async () => {
-    /* Set the running all flag to true */
     setIsRunningAll(true);
     
-    /* Run each test sequentially */
     for (const test of tests) {
       await runTest(test.id);
       /* Small delay between tests */
-      await new Promise(resolve => setTimeout(resolve, 500));
+      await new Promise(resolve => setTimeout(resolve, 1000));
     }
     
     setIsRunningAll(false);
