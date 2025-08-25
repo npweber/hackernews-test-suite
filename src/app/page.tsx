@@ -37,24 +37,21 @@ export default function Home() {
     });
   }, []);
 
-  /* ConsoleOutputListener websocket setup */
+  /* ConsoleOutputListener websocket service */
   useEffect(() => {
-    /* Handle a message from the web socket server */
+    /* Handle incoming test output & error messages */
     const handleWebSocketMessage: (message: WebSocketMessage) => void = async (message: WebSocketMessage) => {
       switch (message.type) {
-        /* If the message is type test_output, append it to the console output */
         case 'test_output': {
           setConsoleOutput(prev => [...prev, `[${message.timestamp}] ${message.data.message}`]);
+          // TODO: Update the test status on the server (POST /api/tests)
           break;
         }
-        /* If the message is type error, handle the error */
         case 'error': {
-          /* If the error is that the web socket server is full, disconnect and log an error */
-          if (message.data.message === 'MAX_CLIENTS_REACHED') {
+          if (message.data.message == 'MAX_CLIENTS_REACHED') {
             consoleOutputListener.disconnect();
             console.error('TestWebSocketService: ERROR: WebSocket server is full. Could not be connected.');
           }
-          /* If the error is any other type, disconnect and log the error */
           else {
             consoleOutputListener.disconnect();
             console.error(`TestWebSocketService: ERROR: ${message.data.message}`);
@@ -63,13 +60,12 @@ export default function Home() {
       }
     };
 
-    /* If the connection status changes, update the connection status state variable */
+    /* On connection status change, update the connection status state variable */
     const handleWebSocketStatusChange = (connected: boolean) => setIsWebSocketConnected(connected);
 
-    /* Connect to the web socket server */
     consoleOutputListener.connect(handleWebSocketMessage, handleWebSocketStatusChange);
 
-    /* Disconnect from the web socket server when the component unmounts */
+    /* On component unmount, disconnect from the web socket server */
     return () => {
       consoleOutputListener.disconnect();
     };
@@ -77,27 +73,35 @@ export default function Home() {
 
   /* Run a test by test id on the client */
   const runTest = async (testId: string) => {
-    /* Clear the console output */
     setConsoleOutput(() => []);
 
-    /* Find the test in the tests array */
     const test = tests.find(t => t.id === testId) as Test;
-
     if (test) {
       test.status = 'running';
-
-      /* Update the test status to running */
       setTests(prev => prev.map(t => t.id === testId ? test : t));
-
-      /* Log the test status */
       console.log(`Client: Test "${test.name}" status "running" on client.`);
 
-      // TODO: Run the test on the server
+      // Run the test on the server
+      fetch('/api/run-test', {
+        method: 'POST',
+        body: safeJsonStringify({ testName: test.name })
+      }).then(async (res: Response) => {
+        const data: { message: string } | { error: string } = await res.json();
+        if ('message' in data && data.message) {
+          console.log(`Client: ${data.message}`);
+        }
+        else if ('error' in data && data.error) {
+          console.error(`Client: ${data.error}`);
+        }
+        else {
+          console.error(`Client: Failed to run test "${test.name}": ${safeJsonStringify(data) || 'Unknown error'}`);
+        }
+      });
 
-      // TODO: Update the test status on the server
+      // TODO: Update the test status on the server (POST /api/tests)
     }
     else {
-      console.error(`Client: Test "${testId}" not found.`);
+      console.error(`Client: Test ID: ${testId} not found in tests array.`);
     }
   }
 

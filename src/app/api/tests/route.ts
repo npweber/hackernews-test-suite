@@ -5,38 +5,38 @@ import path from 'path';
 import { Test } from '@/types/test';
 import { safeJsonParse, safeJsonStringify } from '@/app/lib/util';
 
-// Get all tests from the tests directory
+// GET /api/tests: Get all tests from the tests directory
 export async function GET() : Promise<NextResponse<{ tests: Test[] } | { error: string }>> {
     let response: NextResponse<{ tests: Test[] } | { error: string }>;
-
-    // Initialize an empty array to store the tests
     const tests: Test[] = [];
 
     try {
-        // Try to read the tests directory
-        const testsDirFiles: fs.Dirent[] = fs.readdirSync(path.join(process.cwd(), 'src/tests'), {
+        console.log('GET /api/tests: Reading tests directory...');
+        const testsDir: string = path.join(process.cwd(), 'src/tests');
+        const testsDirFiles: fs.Dirent[] = fs.readdirSync(testsDir, {
             encoding: 'utf8',
             withFileTypes: true
         });
 
-        // If there are tests, parse the JSON data and add it to the tests array
         if (testsDirFiles.length > 0) {
             testsDirFiles.forEach((file: fs.Dirent) => {
                 if (file.isFile() && file.name.endsWith('.json')) {
-                    const testData: Test = safeJsonParse(fs.readFileSync(path.join(process.cwd(), 'src/tests', file.name), 'utf8'));
+                    console.log(`GET /api/tests: Found test file: ${file.name}. Parsing...`);
+                    const testData: Test = safeJsonParse(fs.readFileSync(path.join(testsDir, file.name), 'utf8'));
+                    console.log(`GET /api/tests: Test file parsed: ${file.name}. Adding to tests array...`);
                     tests.push(testData);
                 }
             });
         }
+        console.log(`GET /api/tests: Returning ${tests.length} tests.`);
         response = NextResponse.json({ tests: tests }, { status: 200 });
-    // If there is an error, return a 500 error and the error message
     } catch (error) {
         response = NextResponse.json({ error: `Failed to read tests directory: ${error}` }, { status: 500 });
     }
     return response;
 }
 
-// Update a test by name
+// POST /api/tests: Update a test by name
 export async function POST(request: NextRequest) : Promise<NextResponse<{ message: string } | { error: string }>> {
     let response: NextResponse<{ message: string } | { error: string }>;
 
@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) : Promise<NextResponse<{ messag
             // If the test name is provided, try to update the test file
             else {
                 // Get the test file path
-                const testFile: string = path.join(process.cwd(), 'src/tests', test.name + '.json');
+                const testFile: string = path.join(process.cwd(), 'src/tests', test.name.concat('.json'));
 
                 // Try to update the test file
                 try {

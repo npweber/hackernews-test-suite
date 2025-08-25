@@ -1,57 +1,46 @@
 import { NextRequest, NextResponse } from 'next/server';
+
 import { execCommandRealtime, RealtimeOutput } from '@/app/lib/execRealtime';
 import { TestWebSocketService } from '@/app/services/websocketService';
 import { WebSocketMessage } from '@/types/websocketMessage';
 import { formatTimestampTestOutput } from '@/app/lib/util';
 
-// Run a test by name
+// POST /api/run-test: Run a test by name
 export async function POST(request: NextRequest) : Promise<NextResponse<{ message: string } | { error: string }>> {
     let response: NextResponse<{ message: string } | { error: string }>;
-
-    // If no request body is provided, return a 400 error
     if (!request.body) {
         response = NextResponse.json({ error: 'No request body provided' }, { status: 400 });
     }
-    // If the request body is provided, get the test name and run the test
     else {
         const { testName } : { testName: string } = await request.json();
-        
-        // If no test name is provided, return a 400 error
         if (!testName) {
             response = NextResponse.json({ error: 'No test name provided' }, { status: 400 });
         }
-        // If the test name is provided, run the test
         else {
-            // Run the test and return the response
-            response = await runTestServer(testName.concat('.spec.ts'));
-
-            // If the test is successful, log the message
+            console.log(`POST /api/run-test: Running test: "${testName}"`);
+            response = await runTestOnServer(testName.concat('.spec.ts'));
             if (response.status == 200) 
-                console.log(`POST /api/run-test: Test '${testName}' ran successfully`);
+                console.log(`POST /api/run-test: Test "${testName}" ran successfully`);
         }
     }
     return response;
 }
 
-// Run a test by file name
-async function runTestServer(testFile: string): Promise<NextResponse<{ message: string } | { error: string }>> {
-    // Return a response when the test result is ready
+// runTestOnServer: Run a test on the server by test file name
+async function runTestOnServer(testFile: string): Promise<NextResponse<{ message: string } | { error: string }>> {
     return new Promise<NextResponse<{ message: string } | { error: string }>>((resolve, reject) => {
-        // ConsoleOutputPoster: Posts test output to the web socket server
+        // ConsoleOutputPoster: Web socket service to post test output to the web socket server
         const consoleOutputPoster: TestWebSocketService = new TestWebSocketService();
 
-        // ConsoleOutputPoster: Web socket message handler
+        // ConsoleOutputPoster: Web socket message handler: Handles errors from the web socket server
+        // Only needs to handle errors from the web socket server. All other message types are not sent to it.
         const handleWebSocketMessage: (message: WebSocketMessage) => void = (message: WebSocketMessage) => {
-            // Only needs to handle errors from the web socket server.
-            // All other message types are not sent to the console output listener.
             if (message.type === 'error') {
-                // If the server says it is full, disconnect, log an error and reject the promise
-                if (message.data.message === 'MAX_CLIENTS_REACHED') {
+                if (message.data.message == 'MAX_CLIENTS_REACHED') {
                     consoleOutputPoster.disconnect();
                     console.error('TestWebSocketService: ERROR: WebSocket server is full. Could not be connected.');
                     reject(NextResponse.json({ error: 'TestWebSocketService: ERROR: WebSocket server is full. Could not be connected.' }, { status: 500 }));
                 }
-                // If any other error occurs, disconnect, log an error and reject the promise
                 else {
                     consoleOutputPoster.disconnect();
                     console.error(`TestWebSocketService: ERROR: ${message.data.message}`);
@@ -60,37 +49,34 @@ async function runTestServer(testFile: string): Promise<NextResponse<{ message: 
             }
         };
 
-        // ConsoleOutputPoster: Web socket connection status change handler
-        // On web socket status change, run the test if the web socket is connected
+        // ConsoleOutputPoster: Web socket connection status change handler:
+        // On web socket status change to connected: true, run the test
         const handleWebSocketStatusChange: (connected: boolean) => void = (connected: boolean) => {
             if (connected && consoleOutputPoster.isConnected()) {
-                // Run the test using the playwright test <file> command
-                const command: string = `npx playwright test ${testFile} --project=chromium`;
+                const command: string = `npx playwright test ${testFile}`;
+                const testName: string = testFile.split('.')[0];
 
-                // Run the test and, if the connection is still open, post the console output 
-                // to the web socket server
+                // Use execCommandRealtime to run the test using the playwright test <file> command
+                console.log(`POST /api/run-test: Running test script: ${testFile}`);
                 execCommandRealtime(command, (onOutput: RealtimeOutput) => {
                     if (connected && consoleOutputPoster.isConnected()) {
                         consoleOutputPoster.send({
                             type: 'test_output',
-                            data: { message: onOutput.line, testName: testFile.split('.')[0] },
+                            data: { message: onOutput.line, testName: testName },
                             timestamp: formatTimestampTestOutput(new Date())
                         });
                     }
-                // If the test is finished, disconnect from the web socket server and resolve the promise
                 }).then(() => {
                     consoleOutputPoster.disconnect();
-                    resolve(NextResponse.json({ message: `Test script '${testFile}' ran successfully` }, { status: 200 }));
-                // If the test fails, disconnect from the web socket server and reject the promise
+                    resolve(NextResponse.json({ message: `Test "${testName}" ran successfully` }, { status: 200 }));
                 }).catch((error: any) => {
                     consoleOutputPoster.disconnect();
-                    reject(NextResponse.json({ error: `Failed to run test script '${testFile}': ${error.message}` }, { status: 500 }));
+                    reject(NextResponse.json({ error: `Failed to run test "${testName}": ${error.message}` }, { status: 500 }));
                 });
             }
         }
 
-        // Connect to the web socket server to run the test while 
-        // posting the console output to the web socket server
+        // Connect to the web socket server to run the test while posting the console output to the web socket server
         consoleOutputPoster.connect(handleWebSocketMessage, handleWebSocketStatusChange);
     });
 }
