@@ -36,44 +36,31 @@ export async function GET() : Promise<NextResponse<{ tests: Test[] } | { error: 
     return response;
 }
 
-// POST /api/tests: Update a test by name
-export async function POST(request: NextRequest) : Promise<NextResponse<{ message: string } | { error: string }>> {
+// PUT /api/tests: Update a test by name
+export async function PUT(request: NextRequest) : Promise<NextResponse<{ message: string } | { error: string }>> {
     let response: NextResponse<{ message: string } | { error: string }>;
-
-    // If no request body is provided, return a 400 error
     if (!request.body) {
         response = NextResponse.json({ error: 'No body provided' }, { status: 400 });
     }
     else {
-        // If the request body is provided, get the test
         const { test } : { test: Test } = await request.json();
-        // If no test is provided, return a 400 error
         if (!test) {
             response = NextResponse.json({ error: 'No test provided' }, { status: 400 });
         }
-        // If the test is provided, get the test name
         else {
-            // If the test name is not provided, return a 400 error
             if (!test.name) {
                 response = NextResponse.json({ error: 'No test name provided' }, { status: 400 });
             }
-            // If the test name is provided, try to update the test file
             else {
-                // Get the test file path
                 const testFile: string = path.join(process.cwd(), 'src/tests', test.name.concat('.json'));
-
-                // Try to update the test file
                 try {
-                    // If the test file does not exist, return a 404 error
                     if (!fs.existsSync(testFile)) {
                         response = NextResponse.json({ error: 'Test file not found' }, { status: 404 });
                     }
-                    // If the test file exists, try to update the test file
                     else {
                         fs.writeFileSync(testFile, safeJsonStringify(test));
                         response = NextResponse.json({ message: `Test "${test.name}" updated successfully` }, { status: 200 });
                     }
-                // If there is an error, return a 500 error
                 } catch (error) {
                     response = NextResponse.json({ error: `Failed to update test file: ${error}` }, { status: 500 });
                 }
