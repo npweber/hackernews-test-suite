@@ -1,5 +1,5 @@
 import { isValidWebSocketMessage, WebSocketMessage } from '@/types/websocketMessage';
-import { safeJsonParse, safeJsonStringify } from '@/app/lib/util';
+import { safeJsonParse, safeJsonStringify } from '@/app/util/util';
 
 // TestWebSocketService class: Handles the web socket connection for the 
 // console output listener and console output poster

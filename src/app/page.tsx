@@ -7,7 +7,7 @@ import ConsoleOutput from '@/app/component/consoleOutput';
 import { Test } from '@/types/test';
 import { WebSocketMessage } from '@/types/websocketMessage';
 import { TestWebSocketService } from '@/app/services/websocketService';
-import { formatTimestampTestStatus, safeJsonStringify } from '@/app/lib/util';
+import { formatTimestampTestStatus, safeJsonStringify } from '@/app/util/util';
 
 export default function Home() {
   /* State variables: tests and running all flag */

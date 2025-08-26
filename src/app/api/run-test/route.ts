@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-import { execCommandRealtime, RealtimeOutput } from '@/app/lib/execRealtime';
+import { execCommandRealtime, RealtimeOutput } from '@/app/util/execRealtime';
 import { TestWebSocketService } from '@/app/services/websocketService';
 import { WebSocketMessage } from '@/types/websocketMessage';
-import { formatTimestampTestOutput } from '@/app/lib/util';
+import { formatTimestampTestOutput } from '@/app/util/util';
 
 // POST /api/run-test: Run a test by name
 export async function POST(request: NextRequest) : Promise<NextResponse<{ message: string } | { error: string }>> {
@@ -58,6 +58,11 @@ async function runTestOnServer(testFile: string): Promise<NextResponse<{ message
 
                 // Use execCommandRealtime to run the test using the playwright test <file> command
                 console.log(`POST /api/run-test: Running test script: ${testFile}`);
+                consoleOutputPoster.send({
+                    type: 'test_output',
+                    data: { message: `Running test script: ${testFile}`, testName: testName },
+                    timestamp: formatTimestampTestOutput(new Date())
+                });
                 execCommandRealtime(command, (onOutput: RealtimeOutput) => {
                     if (connected && consoleOutputPoster.isConnected()) {
                         consoleOutputPoster.send({

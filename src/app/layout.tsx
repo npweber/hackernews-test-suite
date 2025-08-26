@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
-import "@/app/globals.css";
 import Image from 'next/image';
+
+import "@/app/globals.css";
 
 export const metadata: Metadata = {
   title: "Hacker News Test Suite",
-  description: "A web application that tests the Hacker News website",
+  description: "A web application designed to test the Hacker News website.",
   icons: {
     icon: '/favicon.svg',
   }

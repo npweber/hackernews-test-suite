@@ -1,6 +1,6 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import { WebSocketMessage, isValidWebSocketMessage } from '@/types/websocketMessage';
-import { safeJsonParse, safeJsonStringify } from '@/app/lib/util';
+import { safeJsonParse, safeJsonStringify } from '@/app/util/util';
 
 // TestWebSocketServer class: Handles communication between the ConsoleOutputPoster and the ConsoleOutputListener clients
 export class TestWebSocketServer {

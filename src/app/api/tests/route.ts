@@ -3,7 +3,7 @@ import fs from 'fs';
 import path from 'path';
 
 import { Test } from '@/types/test';
-import { safeJsonParse, safeJsonStringify } from '@/app/lib/util';
+import { safeJsonParse, safeJsonStringify } from '@/app/util/util';
 
 // GET /api/tests: Get all tests from the tests directory
 export async function GET() : Promise<NextResponse<{ tests: Test[] } | { error: string }>> {
@@ -12,7 +12,7 @@ export async function GET() : Promise<NextResponse<{ tests: Test[] } | { error: 
 
     try {
         console.log('GET /api/tests: Reading tests directory...');
-        const testsDir: string = path.join(process.cwd(), 'src/tests');
+        const testsDir: string = path.join(process.cwd(), 'src/hackernews-tests');
         const testsDirFiles: fs.Dirent[] = fs.readdirSync(testsDir, {
             encoding: 'utf8',
             withFileTypes: true
@@ -52,13 +52,14 @@ export async function PUT(request: NextRequest) : Promise<NextResponse<{ message
                 response = NextResponse.json({ error: 'No test name provided' }, { status: 400 });
             }
             else {
-                const testFile: string = path.join(process.cwd(), 'src/tests', test.name.concat('.json'));
+                const testFile: string = path.join(process.cwd(), 'src/hackernews-tests', test.name.concat('.json'));
                 try {
                     if (!fs.existsSync(testFile)) {
                         response = NextResponse.json({ error: 'Test file not found' }, { status: 404 });
                     }
                     else {
                         fs.writeFileSync(testFile, safeJsonStringify(test));
+                        console.log(`PUT /api/tests: Test "${test.name}" updated successfully`);
                         response = NextResponse.json({ message: `Test "${test.name}" updated successfully` }, { status: 200 });
                     }
                 } catch (error) {
