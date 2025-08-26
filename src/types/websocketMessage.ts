@@ -1,5 +1,5 @@
 export interface WebSocketMessage {
-    type: 'test_output' | 'test_status' | 'error';
+    type: 'test_output' | 'error';
     data: {
         message: string;
         testName: string;
@@ -7,8 +7,8 @@ export interface WebSocketMessage {
     timestamp: string;
   }
 
-function isWebSocketMessageType(typeValue: string): typeValue is 'test_output' | 'test_status' | 'error' {
-  return typeValue === 'test_output' || typeValue === 'test_status' || typeValue === 'error';
+function isWebSocketMessageType(typeValue: string): typeValue is 'test_output' | 'error' {
+  return typeValue === 'test_output' || typeValue === 'error';
 }
 
 export function isValidWebSocketMessage(message: any): WebSocketMessage | undefined {

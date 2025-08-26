@@ -62,11 +62,6 @@ export class TestWebSocketServer {
                 this.sendToClient(otherClient, message);
                 break;
             }
-            case 'test_status': {
-                console.log(`TestWebSocketServer: Received test status: "${message.data.message}" for test: "${message.data.testName}" from ConsoleOutputPoster.`);
-                this.sendToClient(otherClient, message);
-                break;
-            }
             default:
                 throw new Error(`Unknown message type: ${message.type}`);
         }

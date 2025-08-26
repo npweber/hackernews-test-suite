@@ -7,7 +7,7 @@ import ConsoleOutput from '@/app/component/consoleOutput';
 import { Test } from '@/types/test';
 import { WebSocketMessage } from '@/types/websocketMessage';
 import { TestWebSocketService } from '@/app/services/websocketService';
-import { safeJsonStringify } from '@/app/lib/util';
+import { formatTimestampTestStatus, safeJsonStringify } from '@/app/lib/util';
 
 export default function Home() {
   /* State variables: tests and running all flag */
@@ -20,13 +20,35 @@ export default function Home() {
   const [isWebSocketConnected, setIsWebSocketConnected] = useState(false);
   const [consoleOutputListener] = useState(() => new TestWebSocketService());
 
+  function updateTestStatusOnClient(testName: string, status: 'running' | 'failed' | 'passed', passedAt?: string, failedAt?: string): void {
+    tests.forEach(t => {
+      if (t.name === testName) {
+        t.status = status;
+        t.passedAt = passedAt;
+        t.failedAt = failedAt;
+      }
+    });
+    setTests([ ...tests ]);
+    console.log(`Client: Test "${testName}" status "${status}" on client.`);
+  }
+
   /* Fetch tests from server */
   useEffect(() => {
+    const loadTests = (loadTests: Test[]): void => {
+      loadTests.forEach(test => {
+        if (tests.find(t => t.id === test.id) === undefined) {
+          tests.push(test);
+        }
+      });
+      setTests([...tests]);
+      console.log(`Client: Loaded ${tests.length} tests.`);
+    }
+
     fetch('/api/tests').then(async (res: Response) => {
       const data: { tests: Test[] } | { error: string } = await res.json();
       if ('tests' in data && data.tests) {
-        setTests(prev => [...prev, ...data.tests]);
-        console.log(`Client: Fetched ${tests.map.length} tests from server.`);
+        console.log(`Client: Fetched ${data.tests.length} tests from server.`)
+        loadTests(data.tests);
       }
       else if('error' in data && data.error) {
         console.error(`Client: Failed to fetch tests: ${data.error}`);
@@ -39,13 +61,25 @@ export default function Home() {
 
   /* ConsoleOutputListener websocket service */
   useEffect(() => {
-    /* Handle incoming test output & error messages */
+    /* Handle incoming test output & error messages, if the test reports all 5 tests passed, 
+    update the test status on the client, if the test reports a failure, update the test status on the client */
     const handleWebSocketMessage: (message: WebSocketMessage) => void = async (message: WebSocketMessage) => {
       switch (message.type) {
         case 'test_output': {
           setConsoleOutput(prev => [...prev, `[${message.timestamp}] ${message.data.message}`]);
-          // TODO: Update the test status on the server (POST /api/tests)
-          break;
+          if (message.data.message.search(/5 passed/) !== -1) {
+            const passedAt = formatTimestampTestStatus(new Date());
+            updateTestStatusOnClient(message.data.testName, 'passed', passedAt);
+            break;
+          }
+          else if (message.data.message.search(/([1-5]) failed/) !== -1) {
+            const failedAt = formatTimestampTestStatus(new Date());
+            updateTestStatusOnClient(message.data.testName, 'failed', undefined, failedAt);
+            break;
+          }
+          else {
+            break;
+          }          
         }
         case 'error': {
           if (message.data.message == 'MAX_CLIENTS_REACHED') {
@@ -75,14 +109,12 @@ export default function Home() {
   const runTest = async (testId: string) => {
     setConsoleOutput(() => []);
 
-    const test = tests.find(t => t.id === testId) as Test;
+    let test = tests.find(t => t.id === testId) as Test;
     if (test) {
-      test.status = 'running';
-      setTests(prev => prev.map(t => t.id === testId ? test : t));
-      console.log(`Client: Test "${test.name}" status "running" on client.`);
+      updateTestStatusOnClient(test.name, 'running');
 
       // Run the test on the server
-      fetch('/api/run-test', {
+      await fetch('/api/run-test', {
         method: 'POST',
         body: safeJsonStringify({ testName: test.name })
       }).then(async (res: Response) => {
@@ -98,7 +130,25 @@ export default function Home() {
         }
       });
 
-      // TODO: Update the test status on the server (POST /api/tests)
+      // Get the updated test from the tests array
+      test = tests.find(t => t.id === testId) as Test;
+
+      // Update the resulting test status on the server
+      await fetch('/api/tests', {
+        method: 'PUT',
+        body: safeJsonStringify({ test: test })
+      }).then(async (res: Response) => {
+        const data: { message: string } | { error: string } = await res.json();
+        if ('message' in data && data.message) {
+          console.log(`Client: ${data.message}`);
+        }
+        else if ('error' in data && data.error) {
+          console.error(`Client: ${data.error}`);
+        }
+        else {
+          console.error(`Client: Failed to update test "${test.name}": ${safeJsonStringify(data) || 'Unknown error'}`);
+        }
+      });
     }
     else {
       console.error(`Client: Test ID: ${testId} not found in tests array.`);
